@@ -1,0 +1,325 @@
+name: kinal-sports
+
+services:
+  postgres:
+    image: postgres:13
+    container_name: pg-kinal-sports
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-IN6AV}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-In6av2026!}
+      POSTGRES_DB: ${POSTGRES_DB:-kinal_sports}
+    ports:
+      - "${POSTGRES_PORT:-5435}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-IN6AV} -d ${POSTGRES_DB:-kinal_sports}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - kinal-network
+
+  mongodb:
+    image: mongo:7
+    container_name: kinal_mongodb
+    restart: unless-stopped
+    ports:
+      - "${MONGODB_PORT:-27020}:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - kinal-network
+
+  auth-service:
+    build:
+      context: ./authentication-service/auth-service
+      dockerfile: ../../dockerfiles/Dockerfile.auth-service
+    container_name: kinal_auth_service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5156
+      DOTNET_USE_POLLING_FILE_WATCHER: "1"
+      ConnectionStrings__DefaultConnection: >-
+        Host=postgres;Port=5432;Database=${POSTGRES_DB:-kinal_sports};
+        Username=${POSTGRES_USER:-IN6AV};Password=${POSTGRES_PASSWORD:-In6av2026!}
+      AppSettings__FrontendUrl: ${FRONTEND_URL:-http://localhost:5173}
+      JwtSettings__SecretKey: ${JWT_SECRET:-MyVerySecretKeyForJWTTokenAuthenticationWith256Bits!}
+      JwtSettings__Issuer: ${JWT_ISSUER:-AuthService}
+      JwtSettings__Audience: ${JWT_AUDIENCE:-AuthService}
+      SmtpSettings__Enabled: "true"
+      SmtpSettings__Host: ${SMTP_HOST:-smtp.gmail.com}
+      SmtpSettings__Port: ${SMTP_PORT:-465}
+      SmtpSettings__EnableSsl: ${SMTP_ENABLE_SSL:-true}
+      SmtpSettings__Username: ${SMTP_USERNAME:-}
+      SmtpSettings__Password: ${SMTP_PASSWORD:-}
+      SmtpSettings__FromEmail: ${SMTP_FROM:-${EMAIL_FROM:-}}
+      SmtpSettings__FromName: ${SMTP_FROM_NAME:-${EMAIL_FROM_NAME:-Kinal Sports Support}}
+      SmtpSettings__UseImplicitSsl: ${SMTP_USE_IMPLICIT_SSL:-true}
+      CloudinarySettings__CloudName: ${CLOUDINARY_CLOUD_NAME:-dug3apxt3}
+      CloudinarySettings__ApiKey: ${CLOUDINARY_API_KEY:-}
+      CloudinarySettings__ApiSecret: ${CLOUDINARY_API_SECRET:-}
+      CloudinarySettings__BaseUrl: ${CLOUDINARY_BASE_URL:-https://res.cloudinary.com/dug3apxt3/image/upload/}
+      CloudinarySettings__Folder: ${CLOUDINARY_FOLDER:-auth_service/profiles}
+      CloudinarySettings__DefaultAvatarPath: ${CLOUDINARY_DEFAULT_AVATAR_PATH:-auth_service/profiles/avatarDefault-1749508519496_oam3k3}
+    env_file:
+      - path: .env.docker
+        required: false
+    volumes:
+      - ./authentication-service/auth-service:/src
+      - /src/src/AuthService.Api/bin
+      - /src/src/AuthService.Api/obj
+      - /src/src/AuthService.Application/bin
+      - /src/src/AuthService.Application/obj
+      - /src/src/AuthService.Domain/bin
+      - /src/src/AuthService.Domain/obj
+      - /src/src/AuthService.Persistence/bin
+      - /src/src/AuthService.Persistence/obj
+    ports:
+      - "${AUTH_SERVICE_PORT:-5156}:5156"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5156/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - kinal-network
+
+  auth-node:
+    build:
+      context: ./authentication-service/auth-node
+      dockerfile: ../../dockerfiles/Dockerfile.auth-node
+    container_name: kinal_auth_node
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 3007
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-kinal_sports}
+      DB_USERNAME: ${POSTGRES_USER:-IN6AV}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-In6av2026!}
+      DEFAULT_CONNECTION: >-
+        Host=postgres;Port=5432;Database=${POSTGRES_DB:-kinal_sports};
+        Username=${POSTGRES_USER:-IN6AV};Password=${POSTGRES_PASSWORD:-In6av2026!}
+      JWT_SECRET: ${JWT_SECRET:-MyVerySecretKeyForJWTTokenAuthenticationWith256Bits!}
+      JWT_ISSUER: ${JWT_ISSUER:-AuthService}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-AuthService}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_ENABLE_SSL: ${SMTP_ENABLE_SSL:-true}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Kinal Sports Support}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-dug3apxt3}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      CLOUDINARY_BASE_URL: ${CLOUDINARY_BASE_URL:-https://res.cloudinary.com/dug3apxt3/image/upload/}
+      CLOUDINARY_FOLDER: ${CLOUDINARY_FOLDER:-auth_service/profiles}
+      CLOUDINARY_DEFAULT_AVATAR_FILENAME: ${CLOUDINARY_DEFAULT_AVATAR_FILENAME:-avatarDefault-1749508519496_oam3k3}
+      UPLOAD_PATH: ${UPLOAD_PATH:-./uploads/profiles/}
+      CHOKIDAR_USEPOLLING: "true"
+    env_file:
+      - path: .env.docker
+        required: false
+    volumes:
+      - ./authentication-service/auth-node:/app
+      - /app/node_modules
+    ports:
+      - "${AUTH_NODE_PORT:-3007}:3007"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3007/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - kinal-network
+
+  server-admin:
+    build:
+      context: ./server-admin
+      dockerfile: ../dockerfiles/Dockerfile.server-admin
+    container_name: kinal_server_admin
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      auth-node:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 3009
+      URI_MONGODB: mongodb://mongodb:27017/${MONGO_DB_NAME:-kinalSports}
+      JWT_SECRET: ${JWT_SECRET:-MyVerySecretKeyForJWTTokenAuthenticationWith256Bits!}
+      JWT_ISSUER: ${JWT_ISSUER:-AuthService}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-AuthService}
+      ADMIN_ALLOWED_ORIGINS: ${FRONTEND_URL:-http://localhost:5173}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:5156/api/v1}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-KinalSportsInternalSecretToken2026!}
+      CHOKIDAR_USEPOLLING: "true"
+    env_file:
+      - path: .env.docker
+        required: false
+    volumes:
+      - ./server-admin:/app
+      - /app/node_modules
+    ports:
+      - "${SERVER_ADMIN_PORT:-3009}:3009"
+    command: sh -c "CI=true pnpm install && node_modules/.bin/nodemon --legacy-watch index.js"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:3009/kinalSportsAdmin/v1/health || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - kinal-network
+
+  server-user:
+    build:
+      context: ./server-user
+      dockerfile: ../dockerfiles/Dockerfile.server-user
+    container_name: kinal_server_user
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      auth-node:
+        condition: service_healthy
+      server-admin:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 3008
+      URI_MONGODB: mongodb://mongodb:27017/${MONGO_DB_NAME:-kinalSports}
+      JWT_SECRET: ${JWT_SECRET:-MyVerySecretKeyForJWTTokenAuthenticationWith256Bits!}
+      JWT_ISSUER: ${JWT_ISSUER:-AuthService}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-AuthService}
+      ADMIN_SERVICE_URL: http://server-admin:3009/kinalSportsAdmin/v1
+      AUTH_NODE_URL: ${AUTH_NODE_URL:-http://auth-node:3007/api/v1}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-KinalSportsInternalSecretToken2026!}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-dug3apxt3}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      CLOUDINARY_TEAMS_FOLDER: ${CLOUDINARY_TEAMS_FOLDER:-kinal_sports/teams}
+      CHOKIDAR_USEPOLLING: "true"
+    env_file:
+      - path: .env.docker
+        required: false
+    volumes:
+      - ./server-user:/app
+      - /app/node_modules
+    ports:
+      - "${SERVER_USER_PORT:-3008}:3008"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:3008/kinalSportsUser/v1/health || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - kinal-network
+
+  client-admin:
+    build:
+      context: ./client-admin
+      dockerfile: ../dockerfiles/Dockerfile.client-admin
+    container_name: kinal_client_admin
+    restart: unless-stopped
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      auth-node:
+        condition: service_healthy
+      server-admin:
+        condition: service_healthy
+    environment:
+      VITE_AUTH_URL: ${VITE_AUTH_URL:-http://localhost:5156/api/v1}
+      VITE_ADMIN_URL: ${VITE_ADMIN_URL:-http://localhost:3009/kinalSportsAdmin/v1}
+      VITE_CLOUDINARY_BASE_URL: ${VITE_CLOUDINARY_BASE_URL:-https://res.cloudinary.com/dug3apxt3/image/upload/}
+      CHOKIDAR_USEPOLLING: "true"
+    env_file:
+      - path: .env.docker
+        required: false
+    volumes:
+      - ./client-admin:/app
+      - /app/node_modules
+    ports:
+      - "${CLIENT_ADMIN_PORT:-5173}:5173"
+    networks:
+      - kinal-network
+
+  client-user:
+    build:
+      context: ./client-user
+      dockerfile: ../dockerfiles/Dockerfile.client-user
+    container_name: kinal_client_user
+    restart: unless-stopped
+    depends_on:
+      auth-node:
+        condition: service_healthy
+      server-user:
+        condition: service_healthy
+    environment:
+      EXPO_PUBLIC_AUTH_URL: ${EXPO_PUBLIC_AUTH_URL:-http://10.0.2.2:3007/api/v1/auth}
+      EXPO_PUBLIC_USER_URL: ${EXPO_PUBLIC_USER_URL:-http://10.0.2.2:3008/kinalSportsUser/v1}
+      REACT_NATIVE_PACKAGER_HOSTNAME: ${EXPO_PACKAGER_HOSTNAME:-10.0.2.2}
+      EXPO_DEVTOOLS_LISTEN_ADDRESS: 0.0.0.0
+      EXPO_UNSTABLE_HEADLESS: "true"
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    env_file:
+      - path: .env.docker
+        required: false
+    volumes:
+      - ./client-user:/app
+      - /app/node_modules
+    ports:
+      - "${CLIENT_USER_METRO_PORT:-8081}:8081"
+      - "${CLIENT_USER_EXPO_PORT:-19000}:19000"
+      - "${CLIENT_USER_EXPO_DEVTOOLS_PORT:-19001}:19001"
+      - "${CLIENT_USER_EXPO_INSPECTOR_PORT:-19002}:19002"
+    command: sh -c "CI=true pnpm install && pnpm exec expo start --host lan --port 8081"
+    networks:
+      - kinal-network
+
+networks:
+  kinal-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo_data:

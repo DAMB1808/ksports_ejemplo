@@ -1,0 +1,18 @@
+org: IN6CM
+branch: master
+repos:
+  - name: client-admin
+    path: client-admin
+  - name: client-user
+    path: client-user
+  - name: server-admin
+    path: server-admin
+  - name: server-user
+    path: server-user
+  - name: auth-node
+    path: authentication-service/auth-node
+  - name: auth-service
+    path: authentication-service/auth-service
+optional:
+  - name: pg
+    path: pg

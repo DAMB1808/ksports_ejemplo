@@ -1,0 +1,31 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+COPY certs/ /tmp/certs/
+RUN if [ -f /tmp/certs/local-fortinet-ca.crt ]; then \
+      cp /tmp/certs/local-fortinet-ca.crt /usr/local/share/ca-certificates/local-fortinet-ca.crt && \
+      update-ca-certificates; \
+    fi
+
+COPY AuthService.sln ./
+COPY src/AuthService.Domain/ src/AuthService.Domain/
+COPY src/AuthService.Persistence/ src/AuthService.Persistence/
+COPY src/AuthService.Application/ src/AuthService.Application/
+COPY src/AuthService.Api/ src/AuthService.Api/
+
+RUN dotnet restore AuthService.sln
+
+ENV ASPNETCORE_ENVIRONMENT=Development
+ENV ASPNETCORE_URLS=http://+:5156
+
+ENV DOTNET_USE_POLLING_FILE_WATCHER=1
+ENV DOTNET_WATCH_RESTART_ON_RUDE_EDIT=1
+
+EXPOSE 5156
+
+CMD ["dotnet", "watch", "--project", "src/AuthService.Api", "run", "--urls", "http://+:5156"]
